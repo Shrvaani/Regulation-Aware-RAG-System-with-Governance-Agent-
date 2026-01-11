@@ -1,0 +1,13 @@
+
+PRIVACY AND DATA PROTECTION POLICY
+Version 1.5 - Effective January 2024
+
+Section 3: Analytics and Tracking
+3.1 Analytics tools must comply with privacy regulations.
+3.2 IP address anonymization required for web analytics.
+3.3 Cookie consent required before placing non-essential cookies.
+3.4 Third-party analytics require data processing agreements.
+
+Section 4: International Data Transfers
+4.1 Transfers outside authorized regions require specific safeguards.
+4.2 Standard Contractual Clauses (SCCs) required for EU data transfers.

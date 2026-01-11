@@ -1,0 +1,16 @@
+
+INFORMATION SECURITY POLICY
+Version 3.0 - Effective January 2024
+
+Section 2: Access Management
+2.1 Multi-factor authentication (MFA) required for all external access.
+2.2 Password requirements: minimum 12 characters, rotation every 90 days.
+
+Section 3: Data Protection
+3.1 Data at rest encryption is mandatory for all sensitive data.
+3.2 Backup encryption using organization-approved methods only.
+3.3 Data must be anonymized or pseudonymized when possible for analytics.
+
+Section 5: Vendor Management
+5.1 All vendors handling data must complete security questionnaires.
+5.2 Penetration testing results required for high-risk vendors.

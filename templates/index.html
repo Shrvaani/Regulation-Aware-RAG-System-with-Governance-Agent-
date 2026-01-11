@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RAG Governance System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .result h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 20px;
+        }
+        .decision {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .decision.allowed { color: #28a745; }
+        .decision.not-allowed { color: #dc3545; }
+        .decision.conditional { color: #ffc107; }
+        .result-section {
+            margin: 15px 0;
+        }
+        .result-section strong {
+            color: #555;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .result-section ul {
+            margin-left: 20px;
+            color: #666;
+        }
+        .result-section p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+        .badge.high { background: #dc3545; color: white; }
+        .badge.medium { background: #ffc107; color: #333; }
+        .badge.low { background: #28a745; color: white; }
+        .badge.critical { background: #721c24; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚖️ RAG Governance System</h1>
+
+        <form id="evaluateForm">
+                <div class="form-group">
+                <label for="action">Action to Evaluate:</label>
+                <input type="text" id="action" name="action" 
+                        placeholder="e.g., Store user data on an external analytics server"
+                       required>
+                </div>
+
+                <div class="form-group">
+                <label for="context">Additional Context (Optional):</label>
+                <textarea id="context" name="context" 
+                          placeholder="Provide any additional context for the evaluation..."></textarea>
+                </div>
+
+            <button type="submit" id="submitBtn">Evaluate Action</button>
+            </form>
+
+        <div id="loading" class="loading" style="display: none;">
+            Evaluating... Please wait.
+        </div>
+
+        <div id="result"></div>
+        <div id="error"></div>
+    </div>
+
+    <script>
+        document.getElementById('evaluateForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            const resultDiv = document.getElementById('result');
+            const errorDiv = document.getElementById('error');
+            
+            // Reset
+            resultDiv.innerHTML = '';
+            errorDiv.innerHTML = '';
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+            
+            const action = document.getElementById('action').value;
+            const context = document.getElementById('context').value;
+
+            try {
+                const response = await fetch('/evaluate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: action,
+                        context: context || ''
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Evaluation failed');
+                }
+
+                // Display result
+                const decisionClass = data.decision.toLowerCase().replace(' ', '-');
+                const riskBadgeClass = data.risk_level.toLowerCase();
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h2>Evaluation Result</h2>
+                        
+                        <div class="result-section">
+                            <strong>Action:</strong>
+                            <p>${escapeHtml(data.action)}</p>
+                        </div>
+                        
+                        <div class="result-section">
+                            <strong>Decision:</strong>
+                            <div class="decision ${decisionClass}">
+                                ${data.decision}
+                                <span class="badge ${riskBadgeClass}">${data.risk_level} Risk</span>
+                            </div>
+                            <p>Confidence Score: ${(data.confidence_score * 100).toFixed(1)}%</p>
+                        </div>
+                        
+                        <div class="result-section">
+                            <strong>Reason:</strong>
+                            <p>${escapeHtml(data.reason)}</p>
+                        </div>
+                        
+                        ${data.suggested_changes && data.suggested_changes.length > 0 ? `
+                        <div class="result-section">
+                            <strong>Suggested Changes:</strong>
+                            <ul>
+                                ${data.suggested_changes.map(change => `<li>${escapeHtml(change)}</li>`).join('')}
+                            </ul>
+                        </div>
+                        ` : ''}
+                        
+                        ${data.alternative_actions && data.alternative_actions.length > 0 ? `
+                        <div class="result-section">
+                            <strong>Alternative Actions:</strong>
+                            <ul>
+                                ${data.alternative_actions.map(action => `<li>${escapeHtml(action)}</li>`).join('')}
+                            </ul>
+                        </div>
+                        ` : ''}
+                        
+                        ${data.references && data.references.length > 0 ? `
+                        <div class="result-section">
+                            <strong>Policy References:</strong>
+                            <ul>
+                                ${data.references.map(ref => `<li>${escapeHtml(ref)}</li>`).join('')}
+                            </ul>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="result-section">
+                            <strong>Policy Sources:</strong>
+                            <p>${data.policy_sources ? data.policy_sources.join(', ') : 'N/A'}</p>
+                            <p><small>Retrieved ${data.retrieved_policy_count || 0} policy sections</small></p>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                errorDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${escapeHtml(error.message)}</div>`;
+            } finally {
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
+

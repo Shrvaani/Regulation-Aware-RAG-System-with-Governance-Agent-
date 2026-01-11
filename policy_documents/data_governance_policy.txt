@@ -1,0 +1,24 @@
+
+DATA GOVERNANCE POLICY
+Version 2.1 - Effective January 2024
+
+Section 1: Purpose
+This policy establishes guidelines for data handling, storage, and processing.
+
+Section 4: Data Storage Requirements
+4.1 All restricted and confidential data must be stored on organization-controlled infrastructure.
+4.2 External data storage requires written approval from the Data Protection Officer.
+4.3 Cloud storage providers must be approved vendors with SOC 2 or ISO 27001.
+4.4 Data encryption is mandatory:
+    - At rest: AES-256 encryption minimum
+    - In transit: TLS 1.2 or higher
+
+Section 5: Third-Party Data Processing
+5.1 External data processors must undergo security assessment before engagement.
+5.2 Data Processing Agreements (DPAs) are required for all third-party processors.
+5.3 Regular audits of third-party processors must be conducted annually.
+
+Section 6: User Consent
+6.1 Explicit consent required for processing personal data.
+6.2 Users must be informed of data storage locations and processing purposes.
+6.3 Consent must be documented and auditable.

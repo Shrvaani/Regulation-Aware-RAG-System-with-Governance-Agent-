@@ -1,0 +1,65 @@
+{
+  "nodes": [
+    {
+      "id": "section_376",
+      "section_number": "376",
+      "title": "Section 376",
+      "source_file": "repealedfileopen.pdf",
+      "content": "section 376, section 376A, section 376B, section 376C, section 376D, section 376E or section 509 ” the",
+      "source_files": [
+        "repealedfileopen.pdf"
+      ],
+      "entity_type": "Section",
+      "entity_name": "Section 376"
+    },
+    {
+      "id": "section_2",
+      "section_number": "2",
+      "title": "Section 2",
+      "source_file": "repealedfileopen.pdf",
+      "content": "section 2 of the Dowry Prohibition Act, 1961 (28 of 1961).",
+      "source_files": [
+        "repealedfileopen.pdf"
+      ],
+      "entity_type": "Section",
+      "entity_name": "Section 2"
+    },
+    {
+      "id": "section_334",
+      "section_number": "334",
+      "title": "Section 334",
+      "source_file": "repealedfileopen.pdf",
+      "content": "section 334, voluntarily causes hurt, shall be punished with imprisonment of either descript ion for a term",
+      "source_files": [
+        "repealedfileopen.pdf"
+      ],
+      "entity_type": "Section",
+      "entity_name": "Section 334"
+    },
+    {
+      "id": "section_354",
+      "section_number": "354",
+      "title": "Section 354",
+      "source_file": "repealedfileopen.pdf",
+      "content": "section 354B, section 354C or section 354D and being able to prevent such offence, f ails to prevent the",
+      "source_files": [
+        "repealedfileopen.pdf"
+      ],
+      "entity_type": "Section",
+      "entity_name": "Section 354"
+    },
+    {
+      "id": "section_17",
+      "section_number": "17",
+      "title": "Section 17",
+      "source_file": "repealedfileopen.pdf",
+      "content": "section 17 of the Employees ’ Provident Funds and Miscellaneous Provisions Act, 1952 (19 of 1952) or",
+      "source_files": [
+        "repealedfileopen.pdf"
+      ],
+      "entity_type": "Section",
+      "entity_name": "Section 17"
+    }
+  ],
+  "edges": []
+}
