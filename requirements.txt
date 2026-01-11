@@ -1,0 +1,13 @@
+streamlit
+langchain-community
+langchain
+chromadb
+sentence-transformers
+networkx
+huggingface-hub
+pydantic
+python-dotenv
+requests
+pypdf
+unstructured
+
