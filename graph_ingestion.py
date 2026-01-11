@@ -1,5 +1,5 @@
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, UnstructuredPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import networkx as nx
 import json
 import os

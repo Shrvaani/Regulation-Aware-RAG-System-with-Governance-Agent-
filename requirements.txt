@@ -1,6 +1,7 @@
 streamlit
 langchain-community
 langchain
+langchain-text-splitters
 chromadb
 sentence-transformers
 networkx
