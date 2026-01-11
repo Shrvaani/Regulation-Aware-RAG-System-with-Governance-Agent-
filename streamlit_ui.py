@@ -1,7 +1,24 @@
 import streamlit as st
-import requests
 import json
 import os
+import tempfile
+from pathlib import Path
+
+# Try to load environment variables from .env file if python-dotenv is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+except Exception:
+    pass
+
+# Import all necessary modules
+from graph_ingestion import GraphIngestion
+from graph_query_system import GraphQuerySystem
+from regulation_aware_rag import RegulationAwareRAG
+from document_ingestion import DocumentIngestion
+from sample_policies import create_sample_policies
 
 st.set_page_config(
     page_title="RAG Governance System",
@@ -11,25 +28,68 @@ st.set_page_config(
 
 st.title("⚖️ RAG Governance System")
 
-# Sidebar for configuration
+# Sidebar for information
 with st.sidebar:
-    st.header("Configuration")
-    api_url = st.text_input(
-        "API URL",
-        value="http://localhost:5000",
-        help="URL of the Flask API server"
-    )
-    st.markdown("---")
-    st.markdown("### How to use")
+    st.header("About")
     st.markdown("""
-    1. Make sure the Flask API server is running:
-       ```bash
-       python api_server.py
-       ```
-    2. **Graph Ingestion**: Ingest documents to build knowledge graph
-    3. **Graph Query**: Ask questions using the knowledge graph
-    4. **RAG Evaluation**: Evaluate actions using vector RAG
+    **RAG Governance System** provides:
+    1. **Graph Ingestion**: Build knowledge graphs from documents
+    2. **Graph Query**: Query the knowledge graph for answers
+    3. **RAG Evaluation**: Evaluate actions using vector RAG
     """)
+
+# Initialize systems using session state for caching
+@st.cache_resource
+def initialize_rag_system():
+    """Initialize the RAG system for vector-based evaluation."""
+    # Check if vector database exists, if not create sample policies and ingest
+    if not os.path.exists("./chroma_db"):
+        if not os.path.exists("./policy_documents"):
+            create_sample_policies()
+        else:
+            txt_files = [f for f in os.listdir("./policy_documents") if f.endswith('.txt')]
+            if not txt_files:
+                create_sample_policies()
+        
+        # Ingest policies into vector database
+        ingestion = DocumentIngestion()
+        try:
+            ingestion.ingest_folder("./policy_documents")
+        except Exception:
+            pass
+    
+    try:
+        return RegulationAwareRAG()
+    except Exception as e:
+        st.error(f"Failed to initialize RAG system: {str(e)}")
+        return None
+
+@st.cache_resource
+def initialize_graph_ingestion():
+    """Initialize the graph ingestion system."""
+    try:
+        graph_ingestion = GraphIngestion()
+        # Try to load existing graph if available
+        graph_ingestion.load_graph()
+        return graph_ingestion
+    except Exception as e:
+        st.error(f"Failed to initialize graph ingestion: {str(e)}")
+        return None
+
+def get_graph_query_system():
+    """Get graph query system (reinitialize to get latest graph state)."""
+    try:
+        # Reinitialize to get latest graph state
+        graph_ingestion = initialize_graph_ingestion()
+        if graph_ingestion and graph_ingestion.graph.number_of_nodes() > 0:
+            return GraphQuerySystem()
+        return None
+    except Exception:
+        return None
+
+# Initialize systems
+rag_system = initialize_rag_system()
+graph_ingestion = initialize_graph_ingestion()
 
 # Tabs for different functionalities
 tab1, tab2, tab3 = st.tabs(["📊 Graph Ingestion", "🔍 Graph Query", "⚖️ RAG Evaluation"])
@@ -38,162 +98,143 @@ tab1, tab2, tab3 = st.tabs(["📊 Graph Ingestion", "🔍 Graph Query", "⚖️ 
 with tab1:
     st.header("📊 Graph RAG Data Ingestion")
     
-    ingestion_method = st.radio(
-        "Select Ingestion Method",
-        ["URL", "File Upload", "Text Input", "Folder Path"],
-        horizontal=True
-    )
-    
-    use_llm = st.checkbox("Use LLM for entity extraction (slower but more accurate)", value=False)
-    
-    if ingestion_method == "URL":
-        with st.form("ingest_url_form"):
-            st.subheader("Ingest from URL")
-            url = st.text_input(
-                "Document URL",
-                placeholder="https://www.example.com/document.pdf",
-                help="Enter URL of the document to ingest"
-            )
-            
-            submitted_url = st.form_submit_button("Ingest URL", type="primary", use_container_width=True)
-            
-            if submitted_url:
-                if not url:
-                    st.error("Please enter a URL.")
-                else:
-                    with st.spinner(f"Ingesting document from URL... This may take a while."):
-                        try:
-                            response = requests.post(
-                                f"{api_url}/graph/ingest-url",
-                                json={"url": url, "use_llm": use_llm},
-                                timeout=300
-                            )
-                            
-                            if response.status_code == 200:
-                                result = response.json()
+    if graph_ingestion is None:
+        st.error("⚠️ Graph ingestion system not initialized. Please check your configuration.")
+    else:
+        ingestion_method = st.radio(
+            "Select Ingestion Method",
+            ["URL", "File Upload", "Text Input", "Folder Path"],
+            horizontal=True
+        )
+        
+        use_llm = st.checkbox("Use LLM for entity extraction (slower but more accurate)", value=False)
+        
+        if ingestion_method == "URL":
+            with st.form("ingest_url_form"):
+                st.subheader("Ingest from URL")
+                url = st.text_input(
+                    "Document URL",
+                    placeholder="https://www.example.com/document.pdf",
+                    help="Enter URL of the document to ingest"
+                )
+                
+                submitted_url = st.form_submit_button("Ingest URL", type="primary", use_container_width=True)
+                
+                if submitted_url:
+                    if not url:
+                        st.error("Please enter a URL.")
+                    else:
+                        with st.spinner(f"Ingesting document from URL... This may take a while."):
+                            try:
+                                result = graph_ingestion.ingest_from_url(url, use_llm=use_llm)
+                                graph_ingestion.save_graph()
+                                
                                 st.success("✅ Document ingested successfully!")
                                 st.json(result)
-                            else:
-                                error_data = response.json() if response.content else {"error": "Unknown error"}
-                                st.error(f"Error: {error_data.get('error', 'Failed to ingest')}")
-                        except requests.exceptions.ConnectionError:
-                            st.error(f"❌ Cannot connect to API at {api_url}")
-                        except Exception as e:
-                            st.error(f"❌ Error: {str(e)}")
-    
-    elif ingestion_method == "File Upload":
-        with st.form("ingest_file_form"):
-            st.subheader("Upload File")
-            uploaded_file = st.file_uploader(
-                "Choose a file (PDF or TXT)",
-                type=['pdf', 'txt'],
-                help="Upload a PDF or TXT file to ingest"
-            )
-            
-            submitted_file = st.form_submit_button("Upload & Ingest", type="primary", use_container_width=True)
-            
-            if submitted_file:
-                if uploaded_file is None:
-                    st.error("Please upload a file.")
-                else:
-                    with st.spinner("Uploading and ingesting file... This may take a while."):
-                        try:
-                            files = {"file": (uploaded_file.name, uploaded_file, uploaded_file.type)}
-                            data = {"use_llm": use_llm}
-                            response = requests.post(
-                                f"{api_url}/graph/ingest-file",
-                                files=files,
-                                data=data,
-                                timeout=300
-                            )
-                            
-                            if response.status_code == 200:
-                                result = response.json()
-                                st.success("✅ File ingested successfully!")
-                                st.json(result)
-                            else:
-                                error_data = response.json() if response.content else {"error": "Unknown error"}
-                                st.error(f"Error: {error_data.get('error', 'Failed to ingest')}")
-                        except requests.exceptions.ConnectionError:
-                            st.error(f"❌ Cannot connect to API at {api_url}")
-                        except Exception as e:
-                            st.error(f"❌ Error: {str(e)}")
-    
-    elif ingestion_method == "Text Input":
-        with st.form("ingest_text_form"):
-            st.subheader("Enter Text")
-            source_name = st.text_input(
-                "Source Name",
-                value="uploaded_text",
-                help="Name for this text source"
-            )
-            text_input = st.text_area(
-                "Text to Ingest",
-                placeholder="Enter text content here...",
-                height=200,
-                help="Enter the text content to ingest into the graph"
-            )
-            
-            submitted_text = st.form_submit_button("Ingest Text", type="primary", use_container_width=True)
-            
-            if submitted_text:
-                if not text_input:
-                    st.error("Please enter some text.")
-                else:
-                    with st.spinner("Ingesting text... This may take a while."):
-                        try:
-                            response = requests.post(
-                                f"{api_url}/graph/ingest-text",
-                                json={"text": text_input, "source_name": source_name, "use_llm": use_llm},
-                                timeout=300
-                            )
-                            
-                            if response.status_code == 200:
-                                result = response.json()
+                                
+                                # Clear cache to reload graph
+                                st.cache_resource.clear()
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+        
+        elif ingestion_method == "File Upload":
+            with st.form("ingest_file_form"):
+                st.subheader("Upload File")
+                uploaded_file = st.file_uploader(
+                    "Choose a file (PDF or TXT)",
+                    type=['pdf', 'txt'],
+                    help="Upload a PDF or TXT file to ingest"
+                )
+                
+                submitted_file = st.form_submit_button("Upload & Ingest", type="primary", use_container_width=True)
+                
+                if submitted_file:
+                    if uploaded_file is None:
+                        st.error("Please upload a file.")
+                    else:
+                        with st.spinner("Uploading and ingesting file... This may take a while."):
+                            try:
+                                # Save uploaded file to temporary location
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp_file:
+                                    tmp_file.write(uploaded_file.getvalue())
+                                    tmp_path = tmp_file.name
+                                
+                                try:
+                                    result = graph_ingestion.ingest_file(tmp_path, use_llm=use_llm)
+                                    graph_ingestion.save_graph()
+                                    
+                                    st.success("✅ File ingested successfully!")
+                                    st.json(result)
+                                    
+                                    # Clear cache to reload graph
+                                    st.cache_resource.clear()
+                                finally:
+                                    # Clean up temporary file
+                                    if os.path.exists(tmp_path):
+                                        os.remove(tmp_path)
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+        
+        elif ingestion_method == "Text Input":
+            with st.form("ingest_text_form"):
+                st.subheader("Enter Text")
+                source_name = st.text_input(
+                    "Source Name",
+                    value="uploaded_text",
+                    help="Name for this text source"
+                )
+                text_input = st.text_area(
+                    "Text to Ingest",
+                    placeholder="Enter text content here...",
+                    height=200,
+                    help="Enter the text content to ingest into the graph"
+                )
+                
+                submitted_text = st.form_submit_button("Ingest Text", type="primary", use_container_width=True)
+                
+                if submitted_text:
+                    if not text_input:
+                        st.error("Please enter some text.")
+                    else:
+                        with st.spinner("Ingesting text... This may take a while."):
+                            try:
+                                result = graph_ingestion.ingest_text(text_input, source_name=source_name, use_llm=use_llm)
+                                graph_ingestion.save_graph()
+                                
                                 st.success("✅ Text ingested successfully!")
                                 st.json(result)
-                            else:
-                                error_data = response.json() if response.content else {"error": "Unknown error"}
-                                st.error(f"Error: {error_data.get('error', 'Failed to ingest')}")
-                        except requests.exceptions.ConnectionError:
-                            st.error(f"❌ Cannot connect to API at {api_url}")
-                        except Exception as e:
-                            st.error(f"❌ Error: {str(e)}")
-    
-    else:  # Folder Path
-        with st.form("ingest_folder_form"):
-            st.subheader("Ingest Folder")
-            folder_path = st.text_input(
-                "Folder Path",
-                value="./policy_documents",
-                help="Enter path to folder containing documents"
-            )
-            
-            submitted_folder = st.form_submit_button("Ingest Folder", type="primary", use_container_width=True)
-            
-            if submitted_folder:
-                if not folder_path:
-                    st.error("Please enter a folder path.")
-                else:
-                    with st.spinner(f"Ingesting folder '{folder_path}'... This may take a while."):
-                        try:
-                            response = requests.post(
-                                f"{api_url}/graph/ingest-folder",
-                                json={"folder_path": folder_path, "use_llm": use_llm},
-                                timeout=300
-                            )
-                            
-                            if response.status_code == 200:
-                                result = response.json()
+                                
+                                # Clear cache to reload graph
+                                st.cache_resource.clear()
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+        
+        else:  # Folder Path
+            with st.form("ingest_folder_form"):
+                st.subheader("Ingest Folder")
+                folder_path = st.text_input(
+                    "Folder Path",
+                    value="./policy_documents",
+                    help="Enter path to folder containing documents"
+                )
+                
+                submitted_folder = st.form_submit_button("Ingest Folder", type="primary", use_container_width=True)
+                
+                if submitted_folder:
+                    if not folder_path:
+                        st.error("Please enter a folder path.")
+                    else:
+                        with st.spinner(f"Ingesting folder '{folder_path}'... This may take a while."):
+                            try:
+                                result = graph_ingestion.ingest_folder(folder_path, use_llm=use_llm)
+                                
                                 st.success("✅ Folder ingested successfully!")
                                 st.json(result)
-                            else:
-                                error_data = response.json() if response.content else {"error": "Unknown error"}
-                                st.error(f"Error: {error_data.get('error', 'Failed to ingest')}")
-                        except requests.exceptions.ConnectionError:
-                            st.error(f"❌ Cannot connect to API at {api_url}")
-                        except Exception as e:
-                            st.error(f"❌ Error: {str(e)}")
+                                
+                                # Clear cache to reload graph
+                                st.cache_resource.clear()
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
 
 # Tab 2: Graph Query
 with tab2:
@@ -221,14 +262,14 @@ with tab2:
         else:
             with st.spinner("Querying knowledge graph... Please wait."):
                 try:
-                    response = requests.post(
-                        f"{api_url}/graph/query",
-                        json={"question": question, "context": context if context else ""},
-                        timeout=60
-                    )
+                    query_system = get_graph_query_system()
                     
-                    if response.status_code == 200:
-                        result = response.json()
+                    if query_system is None:
+                        st.warning("⚠️ Knowledge graph is empty. Please ingest documents first using the 'Graph Ingestion' tab.")
+                        st.info("Go to the 'Graph Ingestion' tab to ingest documents.")
+                    else:
+                        result = query_system.answer_question(question, context if context else "")
+                        
                         st.success("Query complete!")
                         
                         # Answer Section
@@ -292,19 +333,7 @@ with tab2:
                         # Expandable JSON view
                         with st.expander("View Raw JSON Response"):
                             st.json(result)
-                    
-                    elif response.status_code == 400:
-                        error_data = response.json() if response.content else {"error": "Unknown error"}
-                        st.warning(f"⚠️ {error_data.get('error', 'Graph is empty. Please ingest documents first.')}")
-                        st.info("Go to the 'Graph Ingestion' tab to ingest documents.")
-                    else:
-                        error_data = response.json() if response.content else {"error": "Unknown error"}
-                        st.error(f"Error: {error_data.get('error', 'Failed to query graph')}")
                 
-                except requests.exceptions.ConnectionError:
-                    st.error(f"❌ Cannot connect to API at {api_url}")
-                except requests.exceptions.Timeout:
-                    st.error("⏱️ Request timed out. Please try again.")
                 except Exception as e:
                     st.error(f"❌ Error: {str(e)}")
 
@@ -312,39 +341,32 @@ with tab2:
 with tab3:
     st.header("⚖️ RAG Evaluation")
     
-    with st.form("evaluate_form"):
-        action = st.text_input(
-            "Action to Evaluate *",
-            placeholder="e.g., Store user data on an external analytics server",
-            help="Enter the action you want to evaluate for compliance"
-        )
-        
-        context = st.text_area(
-            "Additional Context (Optional)",
-            placeholder="Provide any additional context for the evaluation...",
-            height=100,
-            help="Optional context that might help with the evaluation"
-        )
-        
-        submitted = st.form_submit_button("Evaluate Action", type="primary", use_container_width=True)
+    if rag_system is None:
+        st.error("⚠️ RAG system not initialized. Please check your configuration.")
+    else:
+        with st.form("evaluate_form"):
+            action = st.text_input(
+                "Action to Evaluate *",
+                placeholder="e.g., Store user data on an external analytics server",
+                help="Enter the action you want to evaluate for compliance"
+            )
+            
+            context = st.text_area(
+                "Additional Context (Optional)",
+                placeholder="Provide any additional context for the evaluation...",
+                height=100,
+                help="Optional context that might help with the evaluation"
+            )
+            
+            submitted = st.form_submit_button("Evaluate Action", type="primary", use_container_width=True)
 
-    if submitted:
-        if not action:
-            st.error("Please enter an action to evaluate.")
-        else:
-            with st.spinner("Evaluating action... Please wait."):
-                try:
-                    response = requests.post(
-                        f"{api_url}/evaluate",
-                        json={
-                            "action": action,
-                            "context": context if context else ""
-                        },
-                        timeout=60
-                    )
-                    
-                    if response.status_code == 200:
-                        result = response.json()
+        if submitted:
+            if not action:
+                st.error("Please enter an action to evaluate.")
+            else:
+                with st.spinner("Evaluating action... Please wait."):
+                    try:
+                        result = rag_system.process_action(action, context if context else "")
                         
                         st.success("Evaluation complete!")
                         
@@ -423,33 +445,5 @@ with tab3:
                         with st.expander("View Raw JSON Response"):
                             st.json(result)
                             
-                    else:
-                        error_data = response.json() if response.content else {"error": "Unknown error"}
-                        st.error(f"Error: {error_data.get('error', 'Failed to evaluate action')}")
-                        st.json(error_data)
-                        
-                except requests.exceptions.ConnectionError:
-                    st.error(f"❌ Cannot connect to API at {api_url}. Please make sure the Flask server is running.")
-                    st.info("Start the server with: `python api_server.py`")
-                except requests.exceptions.Timeout:
-                    st.error("⏱️ Request timed out. The evaluation is taking too long. Please try again.")
-                except Exception as e:
-                    st.error(f"❌ An error occurred: {str(e)}")
-# Health check section at the bottom
-with st.expander("🔍 API Health Check"):
-    if st.button("Check API Health"):
-        try:
-            health_response = requests.get(f"{api_url}/health", timeout=5)
-            if health_response.status_code == 200:
-                health_data = health_response.json()
-                if health_data.get('system_ready'):
-                    st.success("✅ API is healthy and ready")
-                else:
-                    st.warning("⚠️ API is running but system is not ready")
-                st.json(health_data)
-            else:
-                st.error(f"API returned status code: {health_response.status_code}")
-        except requests.exceptions.ConnectionError:
-            st.error(f"Cannot connect to API at {api_url}")
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+                    except Exception as e:
+                        st.error(f"❌ An error occurred: {str(e)}")
